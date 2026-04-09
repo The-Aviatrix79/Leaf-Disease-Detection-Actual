@@ -1,0 +1,5 @@
+plant_disease_model.pth
+
+.venv/
+__pycache__/
+*.pth
