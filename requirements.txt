@@ -5,5 +5,4 @@ torchvision
 opencv-python-headless
 pillow
 numpy
-google-generativeai
 gdown

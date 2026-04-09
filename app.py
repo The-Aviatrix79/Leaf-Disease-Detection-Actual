@@ -7,20 +7,51 @@ import numpy as np
 import cv2
 import os
 import json
-import google.generativeai as genai
 import gdown
 
-# Try to load API key from Streamlit secrets, fallback to environment variable, then hardcoded (for local testing)
-try:
-    if "GEMINI_API_KEY" in st.secrets:
-        api_key = st.secrets["GEMINI_API_KEY"]
-    else:
-        api_key = os.getenv("GEMINI_API_KEY", "AIzaSyD64d7GnvL_CxM2FUelmA48_XxSrvUtMJQ")
-except Exception:
-    api_key = os.getenv("GEMINI_API_KEY", "AIzaSyD64d7GnvL_CxM2FUelmA48_XxSrvUtMJQ")
-
-if api_key:
-    genai.configure(api_key=api_key)
+# =========================
+# Local Disease Cures Database
+# =========================
+DISEASE_CURES = {
+    "Apple___Apple_scab": "Remove infected leaves. Apply a fungicide like Captan or Mancozeb in the spring. Ensure proper pruning for air circulation.",
+    "Apple___Black_rot": "Remove and destroy all infected dead wood and mummified fruit. Apply fungicides such as Captan or thiophanate-methyl.",
+    "Apple___Cedar_apple_rust": "Remove cedar apples from nearby juniper plants. Use preventive fungicide sprays containing myclobutanil or propiconazole.",
+    "Apple___healthy": "The plant is healthy. Maintain regular watering, proper pruning, and routine fertilization.",
+    "Blueberry___healthy": "The plant is healthy. Maintain acidic soil, consistent moisture, and apply mulch.",
+    "Cherry_(including_sour)___Powdery_mildew": "Improve air circulation. Apply sulfur-based or potassium bicarbonate fungicides at the first sign of mildew.",
+    "Cherry_(including_sour)___healthy": "The plant is healthy. Continue routine pruning and appropriate fertilization.",
+    "Corn_(maize)___Cercospora_leaf_spot Gray_leaf_spot": "Use resistant hybrids. Rotate crops and employ conservation tillage. Apply foliar fungicides if disease is severe.",
+    "Corn_(maize)___Common_rust_": "Plant resistant corn varieties. Apply fungicides containing strobilurin or triazole if rust appears early in the season.",
+    "Corn_(maize)___Northern_Leaf_Blight": "Use resistant hybrids. Rotate crops and plow crop residue. Apply fungicides before the disease spreads to the upper leaves.",
+    "Corn_(maize)___healthy": "The plant is healthy. Ensure adequate weed control, fertilization, and spacing.",
+    "Grape___Black_rot": "Prune out infected vines and remove mummified berries. Apply fungicides like myclobutanil or mancozeb before blooming.",
+    "Grape___Esca_(Black_Measles)": "Remove infected wood completely. Avoid significant pruning wounds and disinfect tools. There are no highly effective chemical cures.",
+    "Grape___Leaf_blight_(Isariopsis_Leaf_Spot)": "Apply fungicides containing copper or mancozeb. Improve canopy air circulation through proper pruning.",
+    "Grape___healthy": "The plant is healthy. Maintain regular pruning and soil management.",
+    "Orange___Haunglongbing_(Citrus_greening)": "There is no cure. Inspect trees regularly, control the Asian citrus psyllid vector with insecticides, and remove infected trees.",
+    "Peach___Bacterial_spot": "Maintain tree vigor. Apply copper-based bactericides in the fall and early spring. Avoid planting highly susceptible varieties.",
+    "Peach___healthy": "The plant is healthy. Continue adequate watering, fertilizing, and pruning.",
+    "Pepper,_bell___Bacterial_spot": "Use certified disease-free seeds. Apply copper-based bactericides combined with mancozeb. Practice crop rotation.",
+    "Pepper,_bell___healthy": "The plant is healthy. Maintain consistent moisture and balanced nutrition.",
+    "Potato___Early_blight": "Apply fungicides like chlorothalonil or mancozeb. Ensure proper crop rotation and remove plant debris after harvest.",
+    "Potato___Late_blight": "Use resistant varieties. Apply preventative fungicides such as metalaxyl or copper. Destroy infected tubers and infected crop residues immediately.",
+    "Potato___healthy": "The plant is healthy. Maintain good hilling and irrigation practices.",
+    "Raspberry___healthy": "The plant is healthy. Provide regular pruning, trellising, and adequate watering.",
+    "Soybean___healthy": "The plant is healthy. Ensure good soil pH, pest control, and proper row spacing.",
+    "Squash___Powdery_mildew": "Apply sulfur or potassium bicarbonate fungicides. Space plants adequately for air circulation and water at the base.",
+    "Strawberry___Leaf_scorch": "Remove infected foliage. Ensure good air circulation and avoid overhead watering. Apply protective fungicides like Captan.",
+    "Strawberry___healthy": "The plant is healthy. Provide well-drained soil, full sun, and regular watering.",
+    "Tomato___Bacterial_spot": "Practice crop rotation. Apply copper-based sprays every 7-10 days. Avoid working among wet plants.",
+    "Tomato___Early_blight": "Apply fungicides like chlorothalonil. Remove lower leaves as the plant grows to improve air flow. Rotate crops.",
+    "Tomato___Late_blight": "Apply preventative fungicides (e.g., copper or mancozeb). Water at the base of the plant. Destroy infected plants immediately.",
+    "Tomato___Leaf_Mold": "Improve air circulation through pruning and spacing. Apply fungicides like chlorothalonil. Maintain lower humidity in greenhouses.",
+    "Tomato___Septoria_leaf_spot": "Remove diseased leaves. Apply fungicides (chlorothalonil or mancozeb). Water at the soil level to prevent splashing.",
+    "Tomato___Spider_mites Two-spotted_spider_mite": "Spray plants with water to dislodge mites. Use insecticidal soap, neem oil, or horticultural oil. Encourage natural predators.",
+    "Tomato___Target_Spot": "Ensure proper ventilation and avoid overhead watering. Apply fungicides such as chlorothalonil. Remove infected plant debris.",
+    "Tomato___Tomato_Yellow_Leaf_Curl_Virus": "Control whitefly populations using insecticidal soap or neem oil. Plant resistant varieties. Remove and destroy infected plants.",
+    "Tomato___Tomato_mosaic_virus": "Wash hands and tools thoroughly. Remove infected plants. Avoid smoking near plants, as it can transmit the virus from tobacco.",
+    "Tomato___healthy": "The plant is healthy. Continue providing adequate sunlight, consistent watering, and balanced nutrients."
+}
 
 # =========================
 # Configuration
@@ -617,14 +648,8 @@ with st.container():
 
                     if st.button("🧑‍⚕️ Show the cure", use_container_width=True):
                         with st.spinner("Consulting knowledge base for cure..."):
-                            try:
-                                g_model = genai.GenerativeModel('gemini-2.5-flash')
-                                prompt = f"The following plant disease has been detected: {predicted_class}. Provide a concise but comprehensive cure and actionable recommendations for a farmer. Keep it under 200 words."
-                                response = g_model.generate_content(prompt)
-                                
-                                st.markdown(f'<div class="dash-card" style="margin-top: 1rem;"><div class="dash-card-header" style="color: var(--primary);">💊 Recommended Cure</div><div class="dash-card-body">{response.text}</div></div>', unsafe_allow_html=True)
-                            except Exception as e:
-                                st.error(f"Failed to fetch cure: {e}")
+                            cure_text = DISEASE_CURES.get(predicted_class, "Cure information is currently unavailable for this disease.")
+                            st.markdown(f'<div class="dash-card" style="margin-top: 1rem;"><div class="dash-card-header" style="color: var(--primary);">💊 Recommended Cure</div><div class="dash-card-body">{cure_text}</div></div>', unsafe_allow_html=True)
 
                     if ui_confidence >= 0.75:
                         st.markdown('<div style="margin-top:1rem;"><div class="dash-card"><div class="dash-card-header">🔥 Grad-CAM visualization</div><div class="dash-card-body" style="display:flex; justify-content:center;">', unsafe_allow_html=True)
